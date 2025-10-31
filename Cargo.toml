@@ -1,0 +1,22 @@
+[package]
+name = "pz_spectra"
+version = "0.0.1"
+edition = "2024"
+description = "ezpz fft"
+authors = ["Mordinel <Mordinel@pm.me>"]
+repository = "https://github.com/Mordinel/pz_spectra"
+readme = "README.md"
+license = "Apache-2.0"
+
+[dependencies]
+num-complex = "0.4.6"
+num-traits = "0.2.19"
+
+[features]
+default = []
+convolve = []
+
+[profile.release]
+opt-level=3
+strip = true
+lto = "fat"
