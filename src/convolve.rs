@@ -1,5 +1,5 @@
 use num_traits::Float;
-use super::{c, pad, fft, ifft};
+use super::{c, pad, fft_ordered, ifft_ordered};
 
 /// Convolution modes matching scipy's signal.convolve
 #[derive(Clone, Copy, PartialEq)]
@@ -35,14 +35,14 @@ pub fn convolve<F>(
     pad(signal, fft_len);
     pad(&mut kernel_clone, fft_len);
 
-    fft(signal);
-    fft(&mut kernel_clone);
+    fft_ordered(signal);
+    fft_ordered(&mut kernel_clone);
 
     for (a, b) in signal.iter_mut().zip(kernel_clone.iter()) {
         *a = *a * *b;
     }
 
-    ifft(signal);
+    ifft_ordered(signal);
 
     let out_len = match mode {
         ConvolveMode::Full => full_len,
@@ -101,8 +101,8 @@ pub fn deconvolve<F>(
     pad(signal, fft_len);
     pad(&mut divisor_clone, fft_len);
 
-    fft(signal);
-    fft(&mut divisor_clone);
+    fft_ordered(signal);
+    fft_ordered(&mut divisor_clone);
 
     let damping_threshold = damping_threshold.unwrap_or(F::zero());
     let zero = c::new(F::zero(), F::zero());
@@ -115,7 +115,7 @@ pub fn deconvolve<F>(
         }
     }
 
-    ifft(signal);
+    ifft_ordered(signal);
 
     let out_len = match mode {
         ConvolveMode::Full => full_len,

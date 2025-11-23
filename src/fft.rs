@@ -19,7 +19,12 @@ pub fn fft<F: Float>(data: &mut Vec<c<F>>) {
     let padded_len = original_len.next_power_of_two();
     pad(data, padded_len);
 
-    cooley_tukey_radix2_dit(data, false);
+    cooley_tukey_radix2_dif(data, false);
+}
+/// Performs FFT and applied natural bit ordering
+pub fn fft_ordered<F: Float>(data: &mut Vec<c<F>>) {
+    fft(data);
+    bit_reverse(data);
 }
 
 /// Computes the inverse fourier transform in-place on a vec of complex numbers.
@@ -33,12 +38,17 @@ pub fn ifft<F: Float>(data: &mut Vec<c<F>>) {
     let padded_len = original_len.next_power_of_two();
     pad(data, padded_len);
 
-    cooley_tukey_radix2_dit(data, true);
+    cooley_tukey_radix2_dif(data, true);
 
     let scalar = F::from(padded_len).unwrap().recip();
     for c in data.iter_mut() {
         *c = c.scale(scalar)
     }
+}
+/// Performs IFFT and applied natural bit ordering
+pub fn ifft_ordered<F: Float>(data: &mut Vec<c<F>>) {
+    ifft(data);
+    bit_reverse(data);
 }
 
 /// Roots of unity for twiddle factors, scaled by `k`
@@ -50,11 +60,26 @@ fn roots_of_unity<F: Float>(n: usize, k: F) -> impl Iterator<Item = c<F>> {
         .map(move |x| c::from_polar(F::one(), k * F::from(x).unwrap() * pi / f_n))
 }
 
-/// Core radix-2 decimation in time FFT/IDFT using the Cooley-Tukey algorithm.
+/// Permutes bit reverse ordering into natural ordering 
+/// and natural ordering into bit reverse ordering.
+pub fn bit_reverse<F: Float>(data: &mut[c<F>]) {
+    #[allow(non_snake_case)]
+    let N = data.len();
+    // reorder to even and odd indices
+    let bits = N.trailing_zeros() as usize;
+    for n in 0..N {
+        let i = (n as u64).reverse_bits() as usize >> (64 - bits);
+        if i > n {
+            data.swap(n, i);
+        }
+    }
+}
+
+/// Core radix-2 decimation in freq FFT/IDFT using the Cooley-Tukey algorithm.
 /// Is in-place on the given slice, assuming power of 2 length.
 /// Panics if length is not power of 2.
 #[inline]
-fn cooley_tukey_radix2_dit<F: Float>(data: &mut [c<F>], inverse: bool) {
+fn cooley_tukey_radix2_dif<F: Float>(data: &mut [c<F>], inverse: bool) {
     #[allow(non_snake_case)]
     let N = data.len();
     if N == 1 {
@@ -68,36 +93,33 @@ fn cooley_tukey_radix2_dit<F: Float>(data: &mut [c<F>], inverse: bool) {
     let coef = inverse.then(|| two).unwrap_or_else(|| two.neg());
     let exp_table = roots_of_unity(N, coef).collect::<Vec<_>>();
 
-    // reorder to even and odd indices
-    let bits = N.trailing_zeros() as usize;
-    for n in 0..N {
-        let i = (n as u64).reverse_bits() as usize >> (64 - bits);
-        if i > n {
-            data.swap(n, i);
-        }
-    }
+    let groups = iter::successors(
+        Some(N), 
+        |&sz| (sz > 2).then(|| sz / 2)
+    );
 
-    let powers_of_two = iter::successors(Some(2), |sz| Some(sz * 2));
-    let fft_dit = powers_of_two.map_while(|sz| {
-        if sz > N {
+    let fft_dif = groups.map_while(|sz| {
+        if sz < 2 {
             return None;
         }
         let half_sz = sz / 2;
         let table_step = N / sz;
+
         for i in (0..N).step_by(sz) {
             let mut k = 0;
-            for j in i..i+half_sz {
-                let exp = data[j+half_sz] * exp_table[k];
-                data[j+half_sz] = data[j] - exp;
-                data[j] = data[j] + exp;
+            for j in i..i + half_sz {
+                let add = data[j] + data[j + half_sz];
+                let sub = data[j] - data[j + half_sz];
+                data[j] = add;
+                data[j + half_sz] = sub * exp_table[k];
                 k += table_step;
             }
         }
-        (sz <= N).then(|| sz * 2)
+        Some(sz / 2)
     });
 
     // evaluate the iterator for the side effects
-    let _ = fft_dit.count();
+    let _ = fft_dif.count();
 }
 
 #[cfg(test)]
@@ -159,7 +181,9 @@ mod fft_tests {
         let original: Vec<CType> = vec![CType::new(1.0, 0.0), CType::new(2.0, 0.0), CType::new(3.0, 0.0)];
         let mut data: Vec<CType> = original.clone();
         fft(&mut data);
+        bit_reverse(&mut data);
         ifft(&mut data);
+        bit_reverse(&mut data);
         data.truncate(original.len());
         assert_slices_approx_eq(&data, &original, 1e-5);
     }
@@ -172,14 +196,10 @@ mod fft_tests {
             CType::new(3.0, 0.0),
             CType::new(4.0, 0.0),
         ];
-        let expected: Vec<CType> = vec![
-            CType::new(10.0, 0.0),
-            CType::new(-2.0, 2.0),
-            CType::new(-2.0, 0.0),
-            CType::new(-2.0, -2.0),
-        ];
+        let expected = data.clone();
 
-        fft(&mut data);
+        fft_ordered(&mut data);
+        ifft_ordered(&mut data);
         assert_slices_approx_eq(&data, &expected, 1e-5);
     }
 
@@ -191,14 +211,12 @@ mod fft_tests {
             CType::new(3.0, 0.0),
             CType::new(4.0, 0.0),
         ];
-        let expected: Vec<CType> = vec![
-            CType::new(2.5, 0.0),
-            CType::new(-0.5, -0.5),
-            CType::new(-0.5, 0.0),
-            CType::new(-0.5, 0.5),
-        ];
+        let expected = data.clone();
 
         ifft(&mut data);
+        bit_reverse(&mut data);
+        fft(&mut data);
+        bit_reverse(&mut data);
         assert_slices_approx_eq(&data, &expected, 1e-5);
     }
 
@@ -212,8 +230,8 @@ mod fft_tests {
         ];
         let mut data = original.clone();
 
-        fft(&mut data);
-        ifft(&mut data);
+        fft_ordered(&mut data);
+        ifft_ordered(&mut data);
 
         assert_slices_approx_eq(&data, &original, 1e-5);
     }

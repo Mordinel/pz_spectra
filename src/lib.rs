@@ -21,7 +21,7 @@ fn pad<F: Float>(data: &mut Vec<c<F>>, to_len: usize) {
 }
 
 mod fft;
-pub use fft::{fft, ifft, to_complex};
+pub use fft::{fft, fft_ordered, ifft_ordered, to_complex, bit_reverse};
 
 #[cfg(feature="convolve")]
 mod convolve;
