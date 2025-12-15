@@ -1,10 +1,10 @@
 [package]
 name = "pz_spectra"
-version = "0.0.1"
+version = "0.2.0"
 edition = "2024"
 description = "ezpz fft"
-authors = ["Mordinel <Mordinel@pm.me>"]
-repository = "https://github.com/Mordinel/pz_spectra"
+authors = ["Wleddzig <Wleddzig@pm.me>"]
+repository = "https://codeberg.org/Wleddzig/pz_spectra"
 readme = "README.md"
 license = "Apache-2.0"
 
