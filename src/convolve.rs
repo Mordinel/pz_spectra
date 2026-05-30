@@ -1,4 +1,4 @@
-use num_traits::Float;
+use num_traits::{Float, Zero};
 use super::{c, pad, fft, ifft};
 
 /// Convolution modes matching scipy's signal.convolve
@@ -18,22 +18,24 @@ pub enum ConvolveMode {
 pub fn convolve<F>(
     mode: ConvolveMode,
     signal: &mut Vec<c<F>>,
-    kernel: &Vec<c<F>>,
+    kernel: &[c<F>],
 ) where
     F: Float,
 {
     if signal.is_empty() || kernel.is_empty() {
         return;
     }
-    let mut kernel_clone = kernel.clone();
     let len_a = signal.len();
-    let len_b = kernel_clone.len();
+    let len_b = kernel.len();
     let full_len = len_a + len_b.saturating_sub(1);
     let fft_len = full_len.next_power_of_two();
+
+    let mut kernel_clone = vec![c::zero(); fft_len];
+    kernel_clone[..len_b].copy_from_slice(kernel);
+
     signal.reserve(fft_len.saturating_sub(len_a));
 
     pad(signal, fft_len);
-    pad(&mut kernel_clone, fft_len);
 
     fft(signal);
     fft(&mut kernel_clone);
@@ -82,7 +84,7 @@ pub fn convolve<F>(
 pub fn deconvolve<F>(
     mode: ConvolveMode,
     signal: &mut Vec<c<F>>,
-    divisor: &Vec<c<F>>,
+    divisor: &[c<F>],
     damping_threshold: Option<F>,
 ) where
     F: Float
@@ -97,9 +99,10 @@ pub fn deconvolve<F>(
     let fft_len = full_len.next_power_of_two();
     signal.reserve(fft_len.saturating_sub(len_signal));
 
-    let mut divisor_clone = divisor.clone();
+    let mut divisor_clone = vec![c::zero(); fft_len];
+    divisor_clone[..len_divisor].clone_from_slice(divisor);
+
     pad(signal, fft_len);
-    pad(&mut divisor_clone, fft_len);
 
     fft(signal);
     fft(&mut divisor_clone);
@@ -155,15 +158,15 @@ pub fn deconvolve<F>(
 pub fn correlate<F>(
     mode: ConvolveMode,
     signal_a: &mut Vec<c<F>>,
-    signal_b: &Vec<c<F>>,
+    signal_b: &[c<F>],
 ) where
     F: Float,
 {
     if signal_a.is_empty() || signal_b.is_empty() {
         return;
     }
-    let fb = signal_b.iter().map(|z| z.conj()).rev().collect();
-    convolve(mode, signal_a, &fb);
+    let conj_rev = signal_b.iter().map(|z| z.conj()).rev().collect::<Vec<_>>();
+    convolve(mode, signal_a, &conj_rev);
 }
 
 #[cfg(test)]

@@ -24,6 +24,9 @@ pub fn fft_bit_reversed<F: Float>(data: &mut Vec<c<F>>) {
 /// Performs the FFT
 /// Output length is padded to the next power of 2.
 pub fn fft<F: Float>(data: &mut Vec<c<F>>) {
+    if data.is_empty() {
+        return;
+    }
     fft_bit_reversed(data);
     bit_reverse(data);
 }
@@ -49,6 +52,9 @@ pub fn ifft_bit_reversed<F: Float>(data: &mut Vec<c<F>>) {
 /// Performs the IFFT
 /// Output length is padded to the next power of 2.
 pub fn ifft<F: Float>(data: &mut Vec<c<F>>) {
+    if data.is_empty() {
+        return;
+    }
     ifft_bit_reversed(data);
     bit_reverse(data);
 }
