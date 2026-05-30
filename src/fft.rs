@@ -10,7 +10,7 @@ pub fn to_complex<F: Float>(data: &[F]) -> Vec<c<F>> {
 
 /// Computes the fourier transform in-place on a vec of complex numbers.
 /// Output length is padded to the next power of 2.
-pub fn fft<F: Float>(data: &mut Vec<c<F>>) {
+pub fn fft_bit_reversed<F: Float>(data: &mut Vec<c<F>>) {
     if data.is_empty() {
         return;
     }
@@ -21,15 +21,16 @@ pub fn fft<F: Float>(data: &mut Vec<c<F>>) {
 
     cooley_tukey_radix2_dif(data, false);
 }
-/// Performs FFT and applied natural bit ordering
-pub fn fft_ordered<F: Float>(data: &mut Vec<c<F>>) {
-    fft(data);
+/// Performs the FFT
+/// Output length is padded to the next power of 2.
+pub fn fft<F: Float>(data: &mut Vec<c<F>>) {
+    fft_bit_reversed(data);
     bit_reverse(data);
 }
 
 /// Computes the inverse fourier transform in-place on a vec of complex numbers.
 /// Output length is padded to the next power of 2.
-pub fn ifft<F: Float>(data: &mut Vec<c<F>>) {
+pub fn ifft_bit_reversed<F: Float>(data: &mut Vec<c<F>>) {
     if data.is_empty() {
         return;
     }
@@ -45,9 +46,10 @@ pub fn ifft<F: Float>(data: &mut Vec<c<F>>) {
         *c = c.scale(scalar)
     }
 }
-/// Performs IFFT and applied natural bit ordering
-pub fn ifft_ordered<F: Float>(data: &mut Vec<c<F>>) {
-    ifft(data);
+/// Performs the IFFT
+/// Output length is padded to the next power of 2.
+pub fn ifft<F: Float>(data: &mut Vec<c<F>>) {
+    ifft_bit_reversed(data);
     bit_reverse(data);
 }
 
@@ -63,6 +65,10 @@ fn roots_of_unity<F: Float>(n: usize, k: F) -> impl Iterator<Item = c<F>> {
 /// Permutes bit reverse ordering into natural ordering 
 /// and natural ordering into bit reverse ordering.
 pub fn bit_reverse<F: Float>(data: &mut[c<F>]) {
+    assert!(
+        data.len().is_power_of_two(),
+        "bit_reverse requires power-of-two length"
+    );
     #[allow(non_snake_case)]
     let N = data.len();
     // reorder to even and odd indices
@@ -145,7 +151,7 @@ mod fft_tests {
         let mut data: Vec<CType> = vec![CType::new(5.0, 0.0)];
         let expected: Vec<CType> = vec![CType::new(5.0, 0.0)];
 
-        fft(&mut data);
+        fft_bit_reversed(&mut data);
         assert_slices_approx_eq(&data, &expected, 1e-5);
     }
 
@@ -154,7 +160,7 @@ mod fft_tests {
         let mut data: Vec<CType> = vec![CType::new(5.0, 0.0)];
         let expected: Vec<CType> = vec![CType::new(5.0, 0.0)];
 
-        ifft(&mut data);
+        ifft_bit_reversed(&mut data);
         assert_slices_approx_eq(&data, &expected, 1e-5);
     }
 
@@ -163,7 +169,7 @@ mod fft_tests {
         let mut data: Vec<CType> = vec![CType::new(1.0, 0.0), CType::new(2.0, 0.0)];
         let expected: Vec<CType> = vec![CType::new(3.0, 0.0), CType::new(-1.0, 0.0)];
 
-        fft(&mut data);
+        fft_bit_reversed(&mut data);
         assert_slices_approx_eq(&data, &expected, 1e-5);
     }
 
@@ -172,7 +178,7 @@ mod fft_tests {
         let mut data: Vec<CType> = vec![CType::new(1.0, 0.0), CType::new(2.0, 0.0)];
         let expected: Vec<CType> = vec![CType::new(1.5, 0.0), CType::new(-0.5, 0.0)];
 
-        ifft(&mut data);
+        ifft_bit_reversed(&mut data);
         assert_slices_approx_eq(&data, &expected, 1e-5);
     }
 
@@ -180,9 +186,9 @@ mod fft_tests {
     fn test_round_trip_n3() {
         let original: Vec<CType> = vec![CType::new(1.0, 0.0), CType::new(2.0, 0.0), CType::new(3.0, 0.0)];
         let mut data: Vec<CType> = original.clone();
-        fft(&mut data);
+        fft_bit_reversed(&mut data);
         bit_reverse(&mut data);
-        ifft(&mut data);
+        ifft_bit_reversed(&mut data);
         bit_reverse(&mut data);
         data.truncate(original.len());
         assert_slices_approx_eq(&data, &original, 1e-5);
@@ -198,8 +204,8 @@ mod fft_tests {
         ];
         let expected = data.clone();
 
-        fft_ordered(&mut data);
-        ifft_ordered(&mut data);
+        fft(&mut data);
+        ifft(&mut data);
         assert_slices_approx_eq(&data, &expected, 1e-5);
     }
 
@@ -213,9 +219,9 @@ mod fft_tests {
         ];
         let expected = data.clone();
 
-        ifft(&mut data);
+        ifft_bit_reversed(&mut data);
         bit_reverse(&mut data);
-        fft(&mut data);
+        fft_bit_reversed(&mut data);
         bit_reverse(&mut data);
         assert_slices_approx_eq(&data, &expected, 1e-5);
     }
@@ -230,8 +236,8 @@ mod fft_tests {
         ];
         let mut data = original.clone();
 
-        fft_ordered(&mut data);
-        ifft_ordered(&mut data);
+        fft(&mut data);
+        ifft(&mut data);
 
         assert_slices_approx_eq(&data, &original, 1e-5);
     }
@@ -239,7 +245,7 @@ mod fft_tests {
     #[test]
     fn test_fft_empty() {
         let mut data: Vec<CType> = vec![];
-        fft(&mut data);
+        fft_bit_reversed(&mut data);
         assert!(data.is_empty());
     }
 
@@ -247,8 +253,28 @@ mod fft_tests {
     fn test_ifft_complex_input() {
         let input: Vec<CType> = vec![CType::new(1.0, 1.0), CType::new(2.0, 2.0)];
         let mut data = input.clone();
-        ifft(&mut data);
+        ifft_bit_reversed(&mut data);
         let expected = vec![CType::new(1.5, 1.5), CType::new(-0.5, -0.5)];
+        assert_slices_approx_eq(&data, &expected, 1e-5);
+    }
+
+    #[test]
+    fn test_fft_ordered_known_n4() {
+        let mut data = vec![
+            CType::new(1.0, 0.0),
+            CType::new(2.0, 0.0),
+            CType::new(3.0, 0.0),
+            CType::new(4.0, 0.0),
+        ];
+
+        let expected = vec![
+            CType::new(10.0, 0.0),
+            CType::new(-2.0, 2.0),
+            CType::new(-2.0, 0.0),
+            CType::new(-2.0, -2.0),
+        ];
+
+        fft(&mut data);
         assert_slices_approx_eq(&data, &expected, 1e-5);
     }
 }

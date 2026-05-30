@@ -1,4 +1,4 @@
-#[deny(unsafe_code)]
+#![deny(unsafe_code)]
 
 use num_traits::Float;
 use num_complex::Complex;
@@ -21,7 +21,7 @@ fn pad<F: Float>(data: &mut Vec<c<F>>, to_len: usize) {
 }
 
 mod fft;
-pub use fft::{fft, fft_ordered, ifft_ordered, to_complex, bit_reverse};
+pub use fft::{fft_bit_reversed, fft, ifft, to_complex, bit_reverse};
 
 #[cfg(feature="convolve")]
 mod convolve;
